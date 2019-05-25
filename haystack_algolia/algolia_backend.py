@@ -296,7 +296,7 @@ class AlgoliaSearchQuery(BaseSearchQuery):
             return '*'
 
         # no field filtering. It's an Algolia's feature, not a bug.
-        queries = [value for field_name, value in self.query_filter.children]
+        queries = [value.children[0][1] for value in self.query_filter.children]
 
         return ' '.join(queries)
 
