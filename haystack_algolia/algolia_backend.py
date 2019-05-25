@@ -14,7 +14,7 @@ from warnings import warn
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.db.models.loading import get_model
+from django.apps import apps
 from django.utils import six
 
 import haystack
@@ -185,7 +185,7 @@ class AlgoliaSearchBackend(BaseSearchBackend):
         for raw_result in raw_results.get('hits', []):
             app_label, model_name = raw_result[DJANGO_CT].split('.')
             additional_fields = {}
-            model = get_model(app_label, model_name)
+            model = apps.get_model(app_label, model_name)
 
             if model and model in indexed_models:
                 for key, value in raw_result.items():
