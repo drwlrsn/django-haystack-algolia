@@ -21,7 +21,7 @@ import haystack
 
 from haystack import connections
 from haystack.backends import BaseEngine, BaseSearchBackend, BaseSearchQuery, SearchNode, log_query
-from haystack.inputs import PythonData
+from haystack.inputs import PythonData, Clean
 from haystack.constants import ID, DJANGO_CT, DJANGO_ID
 from haystack.models import SearchResult
 from haystack.utils import get_identifier
@@ -300,6 +300,12 @@ class AlgoliaSearchQuery(BaseSearchQuery):
         return self._build_sub_query(self.query_filter)
 
     def _build_sub_query(self, search_node):
+        """ Traverse 'search_node' of class SearchNode that derives
+        from django.utils.tree.Node to flatten into string.
+        If child is a node call recursively
+        else wrap text with haystack object implementing '.prepare()'
+
+        """
         term_list = []
 
         for child in search_node.children:
@@ -308,9 +314,16 @@ class AlgoliaSearchQuery(BaseSearchQuery):
             else:
                 value = child[1]
 
-                if not hasattr(value, 'query_string'):
-                    value = PythonData(value)
+                # ensure value implements '.prepare()'
+                if not hasattr(value, 'input_type_name'):
+                    if isinstance(value, six.string_types):
+                        # It's not an ``InputType``. Assume ``Clean``.
+                        value = Clean(value)
+                    else:
+                        value = PythonData(value)
+                # or else child[1] is of class InputType
 
+                # append after calling 'prepare' method from its InputType
                 term_list.append(value.prepare(self))
 
         return (' ').join(map(six.text_type, term_list))
