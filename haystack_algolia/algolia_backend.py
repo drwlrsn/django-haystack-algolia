@@ -20,7 +20,8 @@ from django.utils import six
 import haystack
 
 from haystack import connections
-from haystack.backends import BaseEngine, BaseSearchBackend, BaseSearchQuery, log_query
+from haystack.backends import BaseEngine, BaseSearchBackend, BaseSearchQuery, SearchNode, log_query
+from haystack.inputs import PythonData
 from haystack.constants import ID, DJANGO_CT, DJANGO_ID
 from haystack.models import SearchResult
 from haystack.utils import get_identifier
@@ -296,9 +297,23 @@ class AlgoliaSearchQuery(BaseSearchQuery):
             return '*'
 
         # no field filtering. It's an Algolia's feature, not a bug.
-        queries = [value.children[0][1] for value in self.query_filter.children]
+        return self._build_sub_query(self.query_filter)
 
-        return ' '.join(queries)
+    def _build_sub_query(self, search_node):
+        term_list = []
+
+        for child in search_node.children:
+            if isinstance(child, SearchNode):
+                term_list.append(self._build_sub_query(child))
+            else:
+                value = child[1]
+
+                if not hasattr(value, 'query_string'):
+                    value = PythonData(value)
+
+                term_list.append(value.prepare(self))
+
+        return (' ').join(map(six.text_type, term_list))
 
 
 class AlgoliaEngine(BaseEngine):
