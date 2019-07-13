@@ -300,14 +300,19 @@ class AlgoliaSearchQuery(BaseSearchQuery):
         return self._build_sub_query(self.query_filter)
 
     def _build_sub_query(self, search_node):
-        """ Traverse 'search_node' of class SearchNode that derives
-        from django.utils.tree.Node to flatten into string.
-        If child is a node call recursively
-        else wrap text with haystack object implementing '.prepare()'
+        """Returns a string with query terms
+        search_mode: is a SearchNode tree data structure
+        Traverses 'search_node' to find each term, i.e.:
+
+         (AND: (AND: ('text', 'Robert'), ('text', 'Smith')))
+
+        that will be 'flattened' into: 'Robert Smith'
 
         """
         term_list = []
 
+        # When traversing children If child is a node call recursively
+        # else ensure value is a haystack object implementing '.prepare()'
         for child in search_node.children:
             if isinstance(child, SearchNode):
                 term_list.append(self._build_sub_query(child))
@@ -320,12 +325,13 @@ class AlgoliaSearchQuery(BaseSearchQuery):
                         # It's not an ``InputType``. Assume ``Clean``.
                         value = Clean(value)
                     else:
+                        # in case is binary(?) data
                         value = PythonData(value)
                 # or else child[1] is of class InputType
 
-                # append after calling 'prepare' method from its InputType
                 term_list.append(value.prepare(self))
 
+        # make string from list, ensure encoding support
         return (' ').join(map(six.text_type, term_list))
 
 
