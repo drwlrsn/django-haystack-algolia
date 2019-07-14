@@ -20,7 +20,8 @@ from django.utils import six
 import haystack
 
 from haystack import connections
-from haystack.backends import BaseEngine, BaseSearchBackend, BaseSearchQuery, log_query
+from haystack.backends import BaseEngine, BaseSearchBackend, BaseSearchQuery, SearchNode, log_query
+from haystack.inputs import PythonData, Clean
 from haystack.constants import ID, DJANGO_CT, DJANGO_ID
 from haystack.models import SearchResult
 from haystack.utils import get_identifier
@@ -296,9 +297,42 @@ class AlgoliaSearchQuery(BaseSearchQuery):
             return '*'
 
         # no field filtering. It's an Algolia's feature, not a bug.
-        queries = [value.children[0][1] for value in self.query_filter.children]
+        return self._build_sub_query(self.query_filter)
 
-        return ' '.join(queries)
+    def _build_sub_query(self, search_node):
+        """Returns a string with query terms
+        search_mode: is a SearchNode tree data structure
+        Traverses 'search_node' to find each term, i.e.:
+
+         (AND: (AND: ('text', 'Robert'), ('text', 'Smith')))
+
+        that will be 'flattened' into: 'Robert Smith'
+
+        """
+        term_list = []
+
+        # When traversing children If child is a node call recursively
+        # else ensure value is a haystack object implementing '.prepare()'
+        for child in search_node.children:
+            if isinstance(child, SearchNode):
+                term_list.append(self._build_sub_query(child))
+            else:
+                value = child[1]
+
+                # ensure value implements '.prepare()'
+                if not hasattr(value, 'input_type_name'):
+                    if isinstance(value, six.string_types):
+                        # It's not an ``InputType``. Assume ``Clean``.
+                        value = Clean(value)
+                    else:
+                        # in case is binary(?) data
+                        value = PythonData(value)
+                # or else child[1] is of class InputType
+
+                term_list.append(value.prepare(self))
+
+        # make string from list, ensure encoding support
+        return (' ').join(map(six.text_type, term_list))
 
 
 class AlgoliaEngine(BaseEngine):
